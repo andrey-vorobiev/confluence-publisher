@@ -2,9 +2,9 @@
 
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>org.jenkins-ci.plugins</groupId>
-        <artifactId>plugin</artifactId>
-        <version>1.399</version>
+        <groupId>org.eclipse.hudson.plugins</groupId>
+        <artifactId>hudson-plugin-parent</artifactId>
+        <version>3.0.0</version>
     </parent>
 
     <artifactId>confluence-publisher</artifactId>

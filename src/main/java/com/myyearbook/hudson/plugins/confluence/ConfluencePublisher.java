@@ -42,6 +42,10 @@ import jenkins.plugins.confluence.soap.v1.RemotePageSummary;
 import jenkins.plugins.confluence.soap.v1.RemotePageUpdateOptions;
 import jenkins.plugins.confluence.soap.v1.RemoteSpace;
 
+import static hudson.util.FormValidation.*;
+import static java.net.URLDecoder.decode;
+import static org.apache.commons.lang.StringUtils.*;
+
 public class ConfluencePublisher extends Notifier implements Saveable {
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
 
@@ -175,7 +179,7 @@ public class ConfluencePublisher extends Notifier implements Saveable {
 
         final String fileSet = hudson.Util.fixEmptyAndTrim(this.fileSet);
 
-        if (!StringUtils.isEmpty(fileSet)) {
+        if (!isEmpty(fileSet)) {
             log(listener, "Evaluating fileset pattern: " + fileSet);
 
             // Expand environment variables
@@ -218,7 +222,7 @@ public class ConfluencePublisher extends Notifier implements Saveable {
             final String fileName = file.getName();
             String contentType = URLConnection.guessContentTypeFromName(fileName);
 
-            if (StringUtils.isEmpty(contentType)) {
+            if (isEmpty(contentType)) {
                 // Confluence does not allow an empty content type
                 contentType = DEFAULT_CONTENT_TYPE;
             }
@@ -473,48 +477,48 @@ public class ConfluencePublisher extends Notifier implements Saveable {
             return true;
         }
 
-        public FormValidation doPageNameCheck(@QueryParameter final String siteName,
-                @QueryParameter final String spaceName, @QueryParameter final String pageName) {
+        public FormValidation doPageNameCheck(@QueryParameter String siteName, @QueryParameter String spaceName, @QueryParameter String pageName)
+        {
+            siteName = decode(siteName); spaceName = decode(spaceName); pageName = decode(pageName);
+
             ConfluenceSite site = this.getSiteByName(siteName);
 
-            if (hudson.Util.fixEmptyAndTrim(spaceName) == null
-                    || hudson.Util.fixEmptyAndTrim(pageName) == null) {
-                return FormValidation.ok();
+            if (site == null)
+            {
+                return error("Unknown site: " + siteName);
             }
 
-            if (site == null) {
-                return FormValidation.error("Unknown site:" + siteName);
+            if (isEmpty(spaceName) || isEmpty(pageName))
+            {
+                return ok();
             }
 
-            try {
-                ConfluenceSession confluence = site.createSession();
-                RemotePageSummary page = confluence.getPageSummary(spaceName, pageName);
+            try
+            {
+                RemotePageSummary page = site.createSession().getPageSummary(spaceName, pageName);
 
-                if (page != null) {
-                    return FormValidation.ok("OK: " + page.getTitle());
+                return page == null ? error("Page not found") : ok("OK: " + page.getTitle());
+            }
+            catch (RemoteException e)
+            {
+                if (contains(pageName, '$') || contains(spaceName, '$'))
+                {
+                    return warning("Page not found (ignoring build-time parameter)");
                 }
 
-                return FormValidation.error("Page not found");
-            } catch (RemoteException re) {
-                if (StringUtils.contains(pageName, '$') || StringUtils.contains(spaceName, '$')) {
-                    return FormValidation
-                            .warning("Page not found (ignoring build-time parameter)");
-                }
-
-                return FormValidation.error(re, "Page not found");
+                return error(e, "Page not found");
             }
         }
 
-        public FormValidation doSpaceNameCheck(@QueryParameter final String siteName,
-                @QueryParameter final String spaceName) {
+        public FormValidation doSpaceNameCheck(@QueryParameter final String siteName, @QueryParameter final String spaceName) {
             ConfluenceSite site = this.getSiteByName(siteName);
 
             if (hudson.Util.fixEmptyAndTrim(spaceName) == null) {
-                return FormValidation.ok();
+                return ok();
             }
 
             if (site == null) {
-                return FormValidation.error("Unknown site:" + siteName);
+                return error("Unknown site:" + siteName);
             }
 
             try {
@@ -522,17 +526,17 @@ public class ConfluencePublisher extends Notifier implements Saveable {
                 RemoteSpace space = confluence.getSpace(spaceName);
 
                 if (space != null) {
-                    return FormValidation.ok("OK: " + space.getName());
+                    return ok("OK: " + space.getName());
                 }
 
-                return FormValidation.error("Space not found");
+                return error("Space not found");
             } catch (RemoteException re) {
                 if (StringUtils.contains(spaceName, '$')) {
                     return FormValidation
                             .warning("Space not found (ignoring build-time parameter)");
                 }
 
-                return FormValidation.error(re, "Space not found");
+                return error(re, "Space not found");
             }
         }
 

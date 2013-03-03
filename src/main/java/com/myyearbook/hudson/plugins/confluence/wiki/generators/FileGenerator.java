@@ -1,7 +1,7 @@
 
 package com.myyearbook.hudson.plugins.confluence.wiki.generators;
 
-import hudson.EnvVars;
+import com.myyearbook.hudson.plugins.confluence.BuildWrapper;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.model.Descriptor;
@@ -13,7 +13,7 @@ import static org.apache.commons.lang3.StringUtils.isEmpty;
 
 /**
  * Content generator that reads the markup from a configured workspace file.
- * Build variables will be replaced.
+ * BuildWrapper variables will be replaced.
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
@@ -39,7 +39,7 @@ public class FileGenerator extends MarkupGenerator
     }
 
     @Override
-    public String generateMarkup(FilePath workspace, EnvVars vars)
+    public String generateMarkup(BuildWrapper build)
     {
         if (isEmpty(filename))
         {
@@ -48,14 +48,14 @@ public class FileGenerator extends MarkupGenerator
 
         try
         {
-            FilePath markupFile = workspace.child(filename);
+            FilePath markupFile = build.getWorkspace().child(filename);
 
             if (!markupFile.exists())
             {
                 throw new IllegalArgumentException("Markup file: " + filename + " doesn't exist.");
             }
 
-            return vars.expand(markupFile.readToString());
+            return build.expand(markupFile.readToString());
         }
         catch (Exception e)
         {

@@ -46,23 +46,23 @@ public class BetweenTokensEditor extends MarkupEditor
      *
      */
     @Override
-    public String performEdits(String content, String generated, boolean useNewFormat) throws TokenNotFoundException
+    public String performEdits(String originalPage, String generated, boolean useNewFormat)
     {
-        StringBuilder sb = new StringBuilder(content);
+        StringBuilder sb = new StringBuilder(originalPage);
 
-        int start = content.indexOf(startMarkerToken) + startMarkerToken.length(), end = content.indexOf(endMarkerToken);
+        int startMarkerIndex = originalPage.indexOf(startMarkerToken) + startMarkerToken.length(), endMarkerIndex = originalPage.indexOf(endMarkerToken);
 
-        if (start < 0)
+        if (startMarkerIndex < 0)
         {
-            throw new TokenNotFoundException("Start-marker token could not be found in the page content: "+ startMarkerToken);
+            throw new IllegalArgumentException("Start-marker token could not be found in the page content: "+ startMarkerToken);
         }
 
-        if (end < 0)
+        if (endMarkerIndex < 0)
         {
-            throw new TokenNotFoundException("End-marker token could not be found in the page content: " + endMarkerToken);
+            throw new IllegalArgumentException("End-marker token could not be found in the page content: " + endMarkerToken);
         }
 
-        sb.replace(start, end, getSeparator(useNewFormat) + generated + getSeparator(useNewFormat));
+        sb.replace(startMarkerIndex, endMarkerIndex, getSeparator(useNewFormat) + generated + getSeparator(useNewFormat));
 
         return sb.toString();
     }

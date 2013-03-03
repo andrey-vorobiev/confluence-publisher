@@ -1,13 +1,10 @@
 
 package com.myyearbook.hudson.plugins.confluence.wiki.editors;
 
+import com.myyearbook.hudson.plugins.confluence.BuildWrapper;
 import hudson.DescriptorExtensionList;
-import hudson.EnvVars;
 import hudson.ExtensionPoint;
-import hudson.FilePath;
-import hudson.model.BuildListener;
 import hudson.model.Describable;
-import hudson.model.AbstractBuild;
 import hudson.model.Descriptor;
 import hudson.model.Hudson;
 
@@ -44,9 +41,9 @@ public abstract class MarkupEditor implements Describable<MarkupEditor>, Extensi
      * Perform modifications to the page originalPage. Default implementation makes
      * no modifications.
      */
-    public String performReplacement(FilePath workspace, EnvVars vars, String originalPage, boolean isNewFormat) throws TokenNotFoundException
+    public String performReplacement(BuildWrapper build, String originalPage, boolean isNewFormat)
     {
-        String generated = generator.generateMarkup(workspace, vars);
+        String generated = generator.generateMarkup(build);
 
         return performEdits(originalPage, generated, isNewFormat);
     }
@@ -78,11 +75,9 @@ public abstract class MarkupEditor implements Describable<MarkupEditor>, Extensi
     }
 
     /**
-     * Modify the page markup with the given generated content.
-     *
-     * @throws TokenNotFoundException
+     * Modify the page markup with the given generated originalPage.
      */
-    protected abstract String performEdits(String content, String generated, boolean useNewFormat) throws TokenNotFoundException;
+    protected abstract String performEdits(String originalPage, String generated, boolean useNewFormat);
 
     /**
      * Returns the descriptor for this class
@@ -120,22 +115,6 @@ public abstract class MarkupEditor implements Describable<MarkupEditor>, Extensi
         public final List<Descriptor<MarkupGenerator>> getGenerators()
         {
             return MarkupGenerator.all();
-        }
-    }
-
-    /**
-     * Exception thrown when the configured token cannot be found in the wiki
-     * markup.
-     *
-     * @author Joe Hansche <jhansche@myyearbook.com>
-     */
-    public static class TokenNotFoundException extends Exception
-    {
-        private static final long serialVersionUID = -5759944314599051961L;
-
-        public TokenNotFoundException(String message)
-        {
-            super(message);
         }
     }
 }

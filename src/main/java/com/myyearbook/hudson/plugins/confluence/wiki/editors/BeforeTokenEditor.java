@@ -38,15 +38,15 @@ public class BeforeTokenEditor extends MarkupEditor
     }
 
     @Override
-    public String performEdits(String content, String generated, boolean useNewFormat) throws TokenNotFoundException
+    public String performEdits(String originalPage, String generated, boolean useNewFormat)
     {
-        StringBuilder sb = new StringBuilder(content);
+        StringBuilder sb = new StringBuilder(originalPage);
 
-        int insertIndex = content.indexOf(markerToken);
+        int insertIndex = originalPage.indexOf(markerToken);
 
         if (insertIndex < 0)
         {
-            throw new TokenNotFoundException("Marker token could not be located in the page content: " + markerToken);
+            throw new IllegalArgumentException("Marker token could not be located in the page content: " + markerToken);
         }
 
         sb.insert(insertIndex, getSeparator(useNewFormat) + generated);

@@ -33,7 +33,7 @@ public class EntirePageEditor extends MarkupEditor
     }
 
     @Override
-    public String performEdits(String content, String generated, boolean useNewFormat)
+    public String performEdits(String originalPage, String generated, boolean useNewFormat)
     {
         return generated;
     }

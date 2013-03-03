@@ -33,9 +33,9 @@ public class AppendEditor extends MarkupEditor
     }
 
     @Override
-    public String performEdits(String content, String generated, boolean useNewFormat)
+    public String performEdits(String originalPage, String generated, boolean useNewFormat)
     {
-        StringBuilder sb = new StringBuilder(content);
+        StringBuilder sb = new StringBuilder(originalPage);
 
         sb.append(getSeparator(useNewFormat)).append(generated);
 

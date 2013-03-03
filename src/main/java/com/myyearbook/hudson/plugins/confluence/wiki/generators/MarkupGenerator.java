@@ -1,11 +1,12 @@
 
 package com.myyearbook.hudson.plugins.confluence.wiki.generators;
 
+import com.myyearbook.hudson.plugins.confluence.BuildWrapper;
 import hudson.DescriptorExtensionList;
-import hudson.EnvVars;
 import hudson.ExtensionPoint;
-import hudson.FilePath;
-import hudson.model.*;
+import hudson.model.Describable;
+import hudson.model.Descriptor;
+import hudson.model.Hudson;
 
 /**
  * Abstract class representing a method of generating Confluence wiki markup.
@@ -29,5 +30,5 @@ public abstract class MarkupGenerator implements Describable<MarkupGenerator>, E
         return Hudson.getInstance().getDescriptor(getClass());
     }
 
-    public abstract String generateMarkup(FilePath workspace, EnvVars vars);
+    public abstract String generateMarkup(BuildWrapper build);
 }

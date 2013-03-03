@@ -1,7 +1,6 @@
 package com.myyearbook.hudson.plugins.confluence;
 
 import com.myyearbook.hudson.plugins.confluence.wiki.editors.MarkupEditor;
-import com.myyearbook.hudson.plugins.confluence.wiki.editors.MarkupEditor.TokenNotFoundException;
 
 import hudson.EnvVars;
 import hudson.Extension;
@@ -28,7 +27,6 @@ import java.util.List;
 
 import jenkins.plugins.confluence.soap.v1.*;
 
-import static com.myyearbook.hudson.plugins.confluence.CommonHelper.*;
 import static java.net.URLConnection.guessContentTypeFromName;
 import static org.apache.commons.lang.StringUtils.*;
 
@@ -94,16 +92,6 @@ public class ConfluencePublisher extends Notifier implements Saveable
         return publishIfBuildFailed;
     }
 
-    private String getEditComment(EnvVars vars)
-    {
-        return vars.expand("Published from Hudson/Jenkins build: $BUILD_URL");
-    }
-
-    private String getAttachComment(EnvVars vars)
-    {
-        return vars.expand("Published from Hudson/Jenkins build: $BUILD_URL");
-    }
-
     @Exported
     public List<MarkupEditor> getConfiguredEditors()
     {
@@ -155,14 +143,46 @@ public class ConfluencePublisher extends Notifier implements Saveable
         return Result.SUCCESS.equals(result) || publishIfBuildFailed;
     }
 
-    protected EnvVars getEnvVars(AbstractBuild build, BuildListener listener) throws IOException, InterruptedException
+    protected BuildWrapper newBuildWrapper(final AbstractBuild build, final BuildListener listener)
     {
-        EnvVars vars = build.getEnvironment(listener);
+        return new BuildWrapper()
+        {
+            @Override
+            public void log(String message)
+            {
+                listener.getLogger().println("[confluence] " + message);
+            }
 
-        vars.put("BUILD_URL", build.getUrl());
-        vars.put("BUILD_RESULT", build.getResult().toString());
+            @Override
+            public EnvVars getEnvVars()
+            {
+                try
+                {
+                    EnvVars vars = build.getEnvironment(listener);
 
-        return vars;
+                    vars.put("BUILD_URL", build.getUrl());
+                    vars.put("BUILD_RESULT", build.getResult().toString());
+
+                    return vars;
+                }
+                catch (Exception e)
+                {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            public FilePath getWorkspace()
+            {
+                return build.getWorkspace();
+            }
+
+            @Override
+            public File getArtifactsDir()
+            {
+                return build.getArtifactsDir();
+            }
+        };
     }
 
     @Override
@@ -172,25 +192,25 @@ public class ConfluencePublisher extends Notifier implements Saveable
         {
             ConfluenceSite site = descriptor.findSite(siteName);
 
-            EnvVars envVars = getEnvVars(build, listener);
+            BuildWrapper wrapper = newBuildWrapper(build, listener);
 
             ConfluenceSession session = site.createSession();
 
-            RemotePageSummary pageSummary = session.getPageSummary(expand(build, listener, spaceName), expand(build, listener, pageName));
+            RemotePageSummary pageSummary = session.getPageSummary(wrapper.expand(spaceName), wrapper.expand(pageName));
 
-            attachFiles(build, envVars, session, pageSummary);
+            attachFiles(wrapper, session, pageSummary);
 
             if (!editors.isEmpty())
             {
                 if (!session.isVersion4() && pageSummary instanceof RemotePage)
                 {
-                    performWikiReplacements(build.getWorkspace(), envVars, session, (RemotePage) pageSummary);
+                    performWikiReplacements(wrapper, session, (RemotePage) pageSummary);
                 }
                 else
                 {
                     jenkins.plugins.confluence.soap.v2.RemotePage pageDataV2 = session.getPageV2(pageSummary.getId());
 
-                    performWikiReplacements(build.getWorkspace(), envVars, session, pageDataV2);
+                    performWikiReplacements(wrapper, session, pageDataV2);
                 }
             }
 
@@ -204,10 +224,12 @@ public class ConfluencePublisher extends Notifier implements Saveable
         }
     }
 
-    private void attachFiles(AbstractBuild build, EnvVars vars, ConfluenceSession session, RemotePageSummary pageSummary) throws IOException, InterruptedException
+    private void attachFiles(BuildWrapper build, ConfluenceSession session, RemotePageSummary pageSummary) throws IOException, InterruptedException
     {
         if (build.getWorkspace() != null)
         {
+            build.log("Uploading attachments to: " + pageSummary.getUrl());
+
             List<FilePath> attachments = new ArrayList<FilePath>();
 
             if (attachArchivedArtifacts)
@@ -217,7 +239,7 @@ public class ConfluencePublisher extends Notifier implements Saveable
 
             if (!isEmpty(fileSet))
             {
-                for (FilePath workspaceFile : build.getWorkspace().list(vars.expand(fileSet)))
+                for (FilePath workspaceFile : build.getWorkspace().list(build.expand(fileSet)))
                 {
                     if (!attachments.contains(workspaceFile))
                     {
@@ -226,13 +248,19 @@ public class ConfluencePublisher extends Notifier implements Saveable
                 }
             }
 
+            build.log("Uploading " + attachments.size() + " file(s) to Confluence...");
+
             for (FilePath attachment : attachments)
             {
                 try
                 {
                     String contentType = defaultString(guessContentTypeFromName(attachment.getName()), "application/octet-stream");
 
-                    RemoteAttachment result = session.addAttachment(pageSummary.getId(), attachment, contentType, getAttachComment(vars));
+                    build.log("Uploading file: " + attachment.getName() + ", contentType: " + contentType);
+
+                    String attachComment = build.expand("Published from Hudson/Jenkins build: $BUILD_URL");
+
+                    RemoteAttachment result = session.addAttachment(pageSummary.getId(), attachment, contentType, attachComment);
                 }
                 catch (Exception e)
                 {
@@ -242,32 +270,32 @@ public class ConfluencePublisher extends Notifier implements Saveable
         }
     }
 
-    private void performWikiReplacements(FilePath workspace, EnvVars vars, ConfluenceSession session, jenkins.plugins.confluence.soap.v2.RemotePage page) throws IOException, InterruptedException
+    private void performWikiReplacements(BuildWrapper build, ConfluenceSession session, jenkins.plugins.confluence.soap.v2.RemotePage page) throws IOException, InterruptedException
     {
-        page.setContent(performEdits(workspace, vars, page.getContent(), true));
+        page.setContent(performEdits(build, page.getContent(), true));
 
-        session.updatePageV2(page, new jenkins.plugins.confluence.soap.v2.RemotePageUpdateOptions(false, getEditComment(vars)));
+        String editComment = build.expand("Published from Hudson/Jenkins build: $BUILD_URL");
+
+        session.updatePageV2(page, new jenkins.plugins.confluence.soap.v2.RemotePageUpdateOptions(false, editComment));
     }
 
-    private void performWikiReplacements(FilePath workspace, EnvVars vars, ConfluenceSession session, RemotePage page) throws IOException, InterruptedException
+    private void performWikiReplacements(BuildWrapper build, ConfluenceSession session, RemotePage page) throws IOException, InterruptedException
     {
-        page.setContent(performEdits(workspace, vars, page.getContent(), false));
+        page.setContent(performEdits(build, page.getContent(), false));
 
-        session.updatePage(page, new RemotePageUpdateOptions(false, getEditComment(vars)));
+        String editComment = build.expand("Published from Hudson/Jenkins build: $BUILD_URL");
+
+        session.updatePage(page, new RemotePageUpdateOptions(false, editComment));
     }
 
-    private String performEdits(FilePath workspace, EnvVars vars, String pageSource, boolean isNewFormat)
+    private String performEdits(BuildWrapper build, String pageSource, boolean isNewFormat)
     {
         for (MarkupEditor editor : editors)
         {
-            try
-            {
-                pageSource = editor.performReplacement(workspace, vars, pageSource, isNewFormat);
-            }
-            catch (TokenNotFoundException e)
-            {
-                throw new RuntimeException(e);
-            }
+            build.log("Performing wiki edits: " + editor.getDescriptor().getDisplayName());
+
+            pageSource = editor.performReplacement(build, pageSource, isNewFormat);
+
         }
 
         return pageSource;

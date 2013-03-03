@@ -3,8 +3,8 @@
 	<!-- show the selection only when there's something to select -->
     <f:entry title="Confluence Site" help="${descriptor.getHelpFile('siteName')}">
         <select class="setting-input" name="confluenceSiteName">
-            <j:forEach var="s" items="${descriptor.sites}">
-                <f:option selected="${s.name==instance.siteName}">${s.name}</f:option>
+            <j:forEach var="site" items="${descriptor.sites}">
+                <f:option selected="${site.name==instance.siteName}">${site.name}</f:option>
             </j:forEach>
         </select>
     </f:entry>
@@ -26,7 +26,7 @@
     </f:entry>
 
     <f:entry title="Other files to attach" field="fileSet">
-        <f:textbox/>
+        <f:textbox checkUrl="'descriptorByName/ConfluencePublisher/maskCheck?mask=' + escape(toValue(this))"/>
     </f:entry>
 
     <f:entry title="Wiki Markup Replacements" help="${descriptor.getHelpFile('editorList')}">

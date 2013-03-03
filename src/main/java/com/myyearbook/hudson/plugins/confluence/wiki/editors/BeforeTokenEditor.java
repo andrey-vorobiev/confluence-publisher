@@ -15,19 +15,31 @@ import com.myyearbook.hudson.plugins.confluence.wiki.generators.MarkupGenerator;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public class BeforeTokenEditor extends MarkupEditor {
-    public final String markerToken;
+public class BeforeTokenEditor extends MarkupEditor
+{
+    @Extension
+    public static final class DescriptorImpl extends MarkupEditorDescriptor
+    {
+        @Override
+        public String getDisplayName()
+        {
+            return "Insert content before token";
+        }
+    }
+
+    public String markerToken;
 
     @DataBoundConstructor
-    public BeforeTokenEditor(final MarkupGenerator generator, final String markerToken) {
+    public BeforeTokenEditor(MarkupGenerator generator, String markerToken)
+    {
         super(generator);
 
         this.markerToken = unquoteToken(Util.fixEmptyAndTrim(markerToken));
     }
 
     @Override
-    public String performEdits(final BuildListener listener, final String content,
-            final String generated, final boolean isNewFormat) throws TokenNotFoundException {
+    public String performEdits(BuildListener listener, String content, String generated, boolean isNewFormat) throws TokenNotFoundException
+    {
         final StringBuffer sb = new StringBuffer(content);
 
         final int start = content.indexOf(markerToken);
@@ -46,13 +58,5 @@ public class BeforeTokenEditor extends MarkupEditor {
             sb.insert(start, '\n').insert(start, generated);
         }
         return sb.toString();
-    }
-
-    @Extension
-    public static final class DescriptorImpl extends MarkupEditorDescriptor {
-        @Override
-        public String getDisplayName() {
-            return "Insert content before token";
-        }
     }
 }

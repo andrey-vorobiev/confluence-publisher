@@ -21,7 +21,8 @@ import java.util.List;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public abstract class MarkupEditor implements Describable<MarkupEditor>, ExtensionPoint {
+public abstract class MarkupEditor implements Describable<MarkupEditor>, ExtensionPoint
+{
     /**
      * Markup generator
      */
@@ -33,7 +34,8 @@ public abstract class MarkupEditor implements Describable<MarkupEditor>, Extensi
      * @param generator Markup generator
      */
     @DataBoundConstructor
-    public MarkupEditor(final MarkupGenerator generator) {
+    public MarkupEditor(final MarkupGenerator generator)
+    {
         this.generator = generator;
     }
 
@@ -48,12 +50,10 @@ public abstract class MarkupEditor implements Describable<MarkupEditor>, Extensi
      * @return
      * @throws TokenNotFoundException
      */
-    public final String performReplacement(final AbstractBuild<?, ?> build,
-            final BuildListener listener, final String content, boolean isNewFormat)
-            throws TokenNotFoundException {
-        final String generated = generator.generateMarkup(build, listener);
+    public final String performReplacement(AbstractBuild build, BuildListener listener, String content, boolean isNewFormat) throws TokenNotFoundException
+    {
+        String generated = generator.generateMarkup(build, listener);
 
-        // Perform the edit
         return this.performEdits(listener, content, generated, isNewFormat);
     }
 
@@ -63,7 +63,8 @@ public abstract class MarkupEditor implements Describable<MarkupEditor>, Extensi
      * @param listener
      * @param message
      */
-    protected void log(BuildListener listener, String message) {
+    protected void log(BuildListener listener, String message)
+    {
         listener.getLogger().println("[confluence] " + message);
     }
 
@@ -74,7 +75,8 @@ public abstract class MarkupEditor implements Describable<MarkupEditor>, Extensi
      * @param token
      * @return token with wrapping double quotes stripped
      */
-    protected final String unquoteToken(final String token) {
+    protected final String unquoteToken(final String token)
+    {
         if (token == null) {
             return null;
         }

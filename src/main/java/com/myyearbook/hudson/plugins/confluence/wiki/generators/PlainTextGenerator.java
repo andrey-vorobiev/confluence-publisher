@@ -14,29 +14,35 @@ import org.kohsuke.stapler.DataBoundConstructor;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public class PlainTextGenerator extends MarkupGenerator {
+public class PlainTextGenerator extends MarkupGenerator
+{
+    @Extension
+    public static class DescriptorImpl extends Descriptor<MarkupGenerator>
+    {
+        @Override
+        public String getDisplayName()
+        {
+            return "Plain text";
+        }
+    }
+
     public final String text;
 
     @DataBoundConstructor
-    public PlainTextGenerator(final String text) {
+    public PlainTextGenerator(final String text)
+    {
         this.text = text;
     }
 
     @Override
-    public Descriptor<MarkupGenerator> getDescriptor() {
+    public Descriptor<MarkupGenerator> getDescriptor()
+    {
         return super.getDescriptor();
     }
 
     @Override
-    public String generateMarkup(AbstractBuild<?, ?> build, BuildListener listener) {
+    public String generateMarkup(AbstractBuild build, BuildListener listener)
+    {
         return expand(build, listener, this.text);
-    }
-
-    @Extension
-    public static class DescriptorImpl extends Descriptor<MarkupGenerator> {
-        @Override
-        public String getDisplayName() {
-            return "Plain text";
-        }
     }
 }

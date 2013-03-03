@@ -14,16 +14,27 @@ import com.myyearbook.hudson.plugins.confluence.wiki.generators.MarkupGenerator;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public class PrependEditor extends MarkupEditor {
+public class PrependEditor extends MarkupEditor
+{
+    @Extension
+    public static final class DescriptorImpl extends MarkupEditorDescriptor
+    {
+        @Override
+        public String getDisplayName()
+        {
+            return "Prepend content";
+        }
+    }
 
     @DataBoundConstructor
-    public PrependEditor(MarkupGenerator generator) {
+    public PrependEditor(MarkupGenerator generator)
+    {
         super(generator);
     }
 
     @Override
-    public String performEdits(final BuildListener listener, final String content,
-            final String generated, final boolean isNewFormat) {
+    public String performEdits(BuildListener listener,String content, String generated, boolean isNewFormat)
+    {
         final StringBuilder sb = new StringBuilder(content);
 
         // Prepend the generated content to the beginning of the page
@@ -35,13 +46,5 @@ public class PrependEditor extends MarkupEditor {
             sb.insert(0, '\n').insert(0, generated);
         }
         return sb.toString();
-    }
-
-    @Extension
-    public static final class DescriptorImpl extends MarkupEditorDescriptor {
-        @Override
-        public String getDisplayName() {
-            return "Prepend content";
-        }
     }
 }

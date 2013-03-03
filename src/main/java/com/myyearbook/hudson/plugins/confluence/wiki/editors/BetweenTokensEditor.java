@@ -15,13 +15,25 @@ import com.myyearbook.hudson.plugins.confluence.wiki.generators.MarkupGenerator;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public class BetweenTokensEditor extends MarkupEditor {
-    public final String startMarkerToken;
-    public final String endMarkerToken;
+public class BetweenTokensEditor extends MarkupEditor
+{
+    @Extension
+    public static final class DescriptorImpl extends MarkupEditorDescriptor
+    {
+        @Override
+        public String getDisplayName()
+        {
+            return "Replace content between start/end tokens";
+        }
+    }
+
+    public String startMarkerToken;
+
+    public String endMarkerToken;
 
     @DataBoundConstructor
-    public BetweenTokensEditor(final MarkupGenerator generator, final String startMarkerToken,
-            final String endMarkerToken) {
+    public BetweenTokensEditor(MarkupGenerator generator, String startMarkerToken, String endMarkerToken)
+    {
         super(generator);
         this.startMarkerToken = unquoteToken(Util.fixEmptyAndTrim(startMarkerToken));
         this.endMarkerToken = unquoteToken(Util.fixEmptyAndTrim(endMarkerToken));
@@ -37,8 +49,8 @@ public class BetweenTokensEditor extends MarkupEditor {
      * @throws TokenNotFoundException
      */
     @Override
-    public String performEdits(final BuildListener listener, final String content,
-            final String generated, final boolean isNewFormat) throws TokenNotFoundException {
+    public String performEdits(BuildListener listener, final String content, String generated, boolean isNewFormat) throws TokenNotFoundException
+    {
         final StringBuffer sb = new StringBuffer(content);
 
         final int start = content.indexOf(startMarkerToken) + startMarkerToken.length();
@@ -64,13 +76,5 @@ public class BetweenTokensEditor extends MarkupEditor {
             sb.insert(start, '\n').insert(start, generated).insert(start, '\n');
         }
         return sb.toString();
-    }
-
-    @Extension
-    public static final class DescriptorImpl extends MarkupEditorDescriptor {
-        @Override
-        public String getDisplayName() {
-            return "Replace content between start/end tokens";
-        }
     }
 }

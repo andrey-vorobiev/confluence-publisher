@@ -16,13 +16,16 @@ import java.io.IOException;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public abstract class MarkupGenerator implements Describable<MarkupGenerator>, ExtensionPoint {
-    public MarkupGenerator() {
+public abstract class MarkupGenerator implements Describable<MarkupGenerator>, ExtensionPoint
+{
+    public MarkupGenerator()
+    {
         super();
     }
 
     @SuppressWarnings("unchecked")
-    public Descriptor<MarkupGenerator> getDescriptor() {
+    public Descriptor<MarkupGenerator> getDescriptor()
+    {
         return Hudson.getInstance().getDescriptor(getClass());
     }
 
@@ -31,10 +34,9 @@ public abstract class MarkupGenerator implements Describable<MarkupGenerator>, E
      *
      * @return
      */
-    public static DescriptorExtensionList<MarkupGenerator, Descriptor<MarkupGenerator>> all() {
-        return Hudson.getInstance()
-                .<MarkupGenerator, Descriptor<MarkupGenerator>> getDescriptorList(
-                        MarkupGenerator.class);
+    public static DescriptorExtensionList<MarkupGenerator, Descriptor<MarkupGenerator>> all()
+    {
+        return Hudson.getInstance().getDescriptorList(MarkupGenerator.class);
     }
 
     /**
@@ -44,7 +46,7 @@ public abstract class MarkupGenerator implements Describable<MarkupGenerator>, E
      * @param listener
      * @return
      */
-    public abstract String generateMarkup(AbstractBuild<?, ?> build, BuildListener listener);
+    public abstract String generateMarkup(AbstractBuild build, BuildListener listener);
 
     /**
      * Expands replacement variables in the generated text
@@ -54,8 +56,8 @@ public abstract class MarkupGenerator implements Describable<MarkupGenerator>, E
      * @param generated
      * @return
      */
-    protected String expand(final AbstractBuild<?, ?> build, final BuildListener listener,
-            final String generated) {
+    protected String expand(AbstractBuild build, BuildListener listener, String generated)
+    {
         try {
             return build.getEnvironment(listener).expand(generated);
         } catch (IOException e) {

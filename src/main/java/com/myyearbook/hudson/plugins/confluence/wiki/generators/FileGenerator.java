@@ -19,25 +19,39 @@ import java.io.IOException;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public class FileGenerator extends MarkupGenerator {
+public class FileGenerator extends MarkupGenerator
+{
+    @Extension
+    public static class DescriptorImpl extends Descriptor<MarkupGenerator>
+    {
+        @Override
+        public String getDisplayName()
+        {
+            return "File contents";
+        }
+    }
+
     @Exported
-    public final String filename;
+    public String filename;
 
     @DataBoundConstructor
-    public FileGenerator(final String filename) {
+    public FileGenerator(final String filename)
+    {
         this.filename = Util.fixEmptyAndTrim(filename);
     }
 
     @Override
-    public Descriptor<MarkupGenerator> getDescriptor() {
+    public Descriptor<MarkupGenerator> getDescriptor()
+    {
         return super.getDescriptor();
     }
 
     @Override
-    public String generateMarkup(AbstractBuild<?, ?> build, BuildListener listener) {
-        if (this.filename == null) {
-            listener.getLogger().println(
-                    "[confluence] No file is configured, generating empty markup.");
+    public String generateMarkup(AbstractBuild build, BuildListener listener)
+    {
+        if (this.filename == null)
+        {
+            listener.getLogger().println("[confluence] No file is configured, generating empty markup.");
             return "";
         }
 
@@ -60,13 +74,5 @@ public class FileGenerator extends MarkupGenerator {
         }
 
         return "";
-    }
-
-    @Extension
-    public static class DescriptorImpl extends Descriptor<MarkupGenerator> {
-        @Override
-        public String getDisplayName() {
-            return "File contents";
-        }
     }
 }

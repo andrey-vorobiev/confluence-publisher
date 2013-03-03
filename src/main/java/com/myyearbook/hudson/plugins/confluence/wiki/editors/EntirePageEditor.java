@@ -14,23 +14,27 @@ import com.myyearbook.hudson.plugins.confluence.wiki.generators.MarkupGenerator;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public class EntirePageEditor extends MarkupEditor {
+public class EntirePageEditor extends MarkupEditor
+{
+    @Extension
+    public static final class DescriptorImpl extends MarkupEditorDescriptor
+    {
+        @Override
+        public String getDisplayName()
+        {
+            return "Replace entire page content";
+        }
+    }
+
     @DataBoundConstructor
-    public EntirePageEditor(final MarkupGenerator generator) {
+    public EntirePageEditor(final MarkupGenerator generator)
+    {
         super(generator);
     }
 
     @Override
-    public String performEdits(final BuildListener listener, final String content,
-            final String generated, final boolean isNewFormat) {
+    public String performEdits(BuildListener listener, String content, String generated, boolean isNewFormat)
+    {
         return generated;
-    }
-
-    @Extension
-    public static final class DescriptorImpl extends MarkupEditorDescriptor {
-        @Override
-        public String getDisplayName() {
-            return "Replace entire page content";
-        }
     }
 }

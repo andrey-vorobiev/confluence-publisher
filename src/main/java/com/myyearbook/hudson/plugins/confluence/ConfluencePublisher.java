@@ -3,607 +3,302 @@ package com.myyearbook.hudson.plugins.confluence;
 import com.myyearbook.hudson.plugins.confluence.wiki.editors.MarkupEditor;
 import com.myyearbook.hudson.plugins.confluence.wiki.editors.MarkupEditor.TokenNotFoundException;
 
-import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.model.BuildListener;
-import hudson.model.EnvironmentContributingAction;
 import hudson.model.Result;
 import hudson.model.Saveable;
 import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
 import hudson.model.Descriptor;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.BuildStepMonitor;
 import hudson.tasks.Notifier;
-import hudson.tasks.Publisher;
 import hudson.util.DescribableList;
-import hudson.util.FormValidation;
 
-import net.sf.json.JSONObject;
-
-import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.export.Exported;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URLConnection;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-import jenkins.plugins.confluence.soap.v1.RemoteAttachment;
-import jenkins.plugins.confluence.soap.v1.RemotePage;
-import jenkins.plugins.confluence.soap.v1.RemotePageSummary;
-import jenkins.plugins.confluence.soap.v1.RemotePageUpdateOptions;
-import jenkins.plugins.confluence.soap.v1.RemoteSpace;
+import jenkins.plugins.confluence.soap.v1.*;
 
-import static hudson.util.FormValidation.*;
-import static java.net.URLDecoder.decode;
+import static java.net.URLConnection.guessContentTypeFromName;
 import static org.apache.commons.lang.StringUtils.*;
 
-public class ConfluencePublisher extends Notifier implements Saveable {
-    private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
+@SuppressWarnings("unused")
+public class ConfluencePublisher extends Notifier implements Saveable
+{
+    @Extension
+    public static final ConfluenceBuildStepDescriptor descriptor = new ConfluenceBuildStepDescriptor();
 
-    private final String siteName;
-    private final boolean attachArchivedArtifacts;
-    private final boolean buildIfUnstable;
-    private final String fileSet;
+    private static final Logger log = Logger.getLogger(ConfluencePublisher.class.getName());
 
-    private final String spaceName;
-    private final String pageName;
+    private String siteName;
 
-    private DescribableList<MarkupEditor, Descriptor<MarkupEditor>> editors = new DescribableList<MarkupEditor, Descriptor<MarkupEditor>>(
-            this);
+    private String pageName;
+
+    private String spaceName;
+
+    private String fileSet;
+
+    private boolean attachArchivedArtifacts;
+
+    private boolean publishIfBuildFailed;
+
+    private DescribableList<MarkupEditor, Descriptor<MarkupEditor>> editors = new DescribableList<MarkupEditor, Descriptor<MarkupEditor>>(this);
 
     @DataBoundConstructor
-    public ConfluencePublisher(String siteName, final boolean buildIfUnstable,
-            final String spaceName, final String pageName, final boolean attachArchivedArtifacts,
-            final String fileSet, final List<MarkupEditor> editorList) throws IOException {
-
-        if (siteName == null) {
-            List<ConfluenceSite> sites = getDescriptor().getSites();
-
-            if (sites != null && sites.size() > 0) {
-                siteName = sites.get(0).getName();
-            }
-        }
-
-        this.siteName = siteName;
-        this.spaceName = spaceName;
-        this.pageName = pageName;
-        this.buildIfUnstable = buildIfUnstable;
+    public ConfluencePublisher(String confluenceSiteName, boolean buildIfUnstable, String confluenceSpaceName, final String confluencePageName, boolean attachArchivedArtifacts, String fileSet, List<MarkupEditor> editorList) throws IOException
+    {
+        this.siteName = confluenceSiteName;
+        this.spaceName = confluenceSpaceName;
+        this.pageName = confluencePageName;
+        this.publishIfBuildFailed = buildIfUnstable;
         this.attachArchivedArtifacts = attachArchivedArtifacts;
         this.fileSet = fileSet;
-
-        if (editorList != null) {
-            this.editors.addAll(editorList);
-        } else {
-            this.editors.clear();
-        }
+        this.editors.addAll(editorList);
     }
 
-    @Exported
-    public List<MarkupEditor> getConfiguredEditors() {
-        return this.editors.toList();
+    private static void log(BuildListener listener, String message)
+    {
+        listener.getLogger().println("[confluence] " + message);
     }
 
-    @Override
-    public DescriptorImpl getDescriptor() {
-        return (DescriptorImpl) super.getDescriptor();
-    }
-
-    /**
-     * @return the fileSet
-     */
-    public String getFileSet() {
-        return fileSet;
-    }
-
-    /**
-     * @return the pageName
-     */
-    public String getPageName() {
-        return pageName;
-    }
-
-    public BuildStepMonitor getRequiredMonitorService() {
-        return BuildStepMonitor.BUILD;
-    }
-
-    public ConfluenceSite getSite() {
-        List<ConfluenceSite> sites = getDescriptor().getSites();
-
-        if (sites == null) {
-            return null;
-        }
-
-        if (siteName == null && sites.size() > 0) {
-            // default
-            return sites.get(0);
-        }
-
-        for (ConfluenceSite site : sites) {
-            if (site.getName().equals(siteName)) {
-                return site;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * @return the siteName
-     */
-    public String getSiteName() {
+    public String getSiteName()
+    {
         return siteName;
     }
 
-    /**
-     * @return the spaceName
-     */
-    public String getSpaceName() {
+    public String getPageName()
+    {
+        return pageName;
+    }
+
+    public String getSpaceName()
+    {
         return spaceName;
     }
 
-    protected boolean
-            performAttachments(AbstractBuild<?, ?> build, Launcher launcher,
-                    BuildListener listener, ConfluenceSession confluence,
-                    final RemotePageSummary pageData) throws IOException, InterruptedException {
+    public String getFileSet()
+    {
+        return fileSet;
+    }
 
-        final long pageId = pageData.getId();
-        FilePath ws = build.getWorkspace();
+    public boolean shouldAttachArchivedArtifacts()
+    {
+        return attachArchivedArtifacts;
+    }
 
-        if (ws == null) {
-            // Possibly running on a slave that went down
-            log(listener, "Workspace is unavailable.");
-            return false;
+    public boolean shouldBuildIfUnstable()
+    {
+        return publishIfBuildFailed;
+    }
+
+    private String expand(AbstractBuild build, BuildListener listener, String source)
+    {
+        try
+        {
+            return build.getEnvironment(listener).expand(source);
         }
-
-        String attachmentComment = build.getEnvironment(listener).expand(
-                "Published from Jenkins build: $BUILD_URL");
-
-        log(listener, "Uploading attachments to Confluence page: " + pageData.getUrl());
-
-        final List<FilePath> files = new ArrayList<FilePath>();
-
-        if (this.attachArchivedArtifacts) {
-            final List<FilePath> archived = this.findArtifacts(build.getArtifactsDir());
-            log(listener, "Found " + archived.size()
-                    + " archived artifact(s) to upload to Confluence...");
-            files.addAll(archived);
+        catch (Exception e)
+        {
+            log.log(Level.WARNING, "Unable to expand source: " + source, e);
+            return source;
         }
+    }
 
-        final String fileSet = hudson.Util.fixEmptyAndTrim(this.fileSet);
+    private String getEditComment(AbstractBuild build, BuildListener listener)
+    {
+        return expand(build, listener, "Published from Hudson/Jenkins build: $BUILD_URL");
+    }
 
-        if (!isEmpty(fileSet)) {
-            log(listener, "Evaluating fileset pattern: " + fileSet);
+    private String getAttachComment(AbstractBuild build, BuildListener listener)
+    {
+        return expand(build, listener, "Published from Hudson/Jenkins build: $BUILD_URL");
+    }
 
-            // Expand environment variables
-            final String artifacts = build.getEnvironment(listener).expand(fileSet);
-            // Obtain a list of all files that match the pattern
-            final FilePath[] workspaceFiles = ws.list(artifacts);
-
-            if (workspaceFiles.length > 0) {
-                log(listener, "Found " + workspaceFiles.length
-                        + " workspace artifact(s) to upload to Confluence...");
-
-                for (FilePath file : workspaceFiles) {
-                    if (!files.contains(file)) {
-                        files.add(file);
-                    } else {
-                        // Don't include the file twice if it's already in the
-                        // list
-                        log(listener, " - pattern matched an archived artifact: " + file.getName());
-                    }
-                }
-            } else {
-                log(listener, "No files matched the pattern '" + fileSet + "'.");
-                String msg = null;
-
-                try {
-                    msg = ws.validateAntFileMask(artifacts);
-                } catch (Exception e) {
-                    log(listener, "" + e.getMessage());
-                }
-
-                if (msg != null) {
-                    log(listener, "" + msg);
-                }
-            }
-        }
-
-        log(listener, "Uploading " + files.size() + " file(s) to Confluence...");
-
-        for (FilePath file : files) {
-            final String fileName = file.getName();
-            String contentType = URLConnection.guessContentTypeFromName(fileName);
-
-            if (isEmpty(contentType)) {
-                // Confluence does not allow an empty content type
-                contentType = DEFAULT_CONTENT_TYPE;
-            }
-
-            log(listener, " - Uploading file: " + fileName + " (" + contentType + ")");
-
-            try {
-                final RemoteAttachment result = confluence.addAttachment(pageId, file,
-                        contentType, attachmentComment);
-                log(listener, "   done: " + result.getUrl());
-            } catch (IOException ioe) {
-                listener.error("Unable to upload file...");
-                ioe.printStackTrace(listener.getLogger());
-            } catch (InterruptedException ie) {
-                listener.error("Unable to upload file...");
-                ie.printStackTrace(listener.getLogger());
-            }
-        }
-        log(listener, "Done");
-
-        return true;
+    @Exported
+    public List<MarkupEditor> getConfiguredEditors()
+    {
+        return editors.toList();
     }
 
     @Override
-    public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener)
-            throws RemoteException {
+    public BuildStepDescriptor getDescriptor()
+    {
+        return descriptor;
+    }
 
-        boolean result = true;
-        ConfluenceSite site = getSite();
+    public BuildStepMonitor getRequiredMonitorService()
+    {
+        return BuildStepMonitor.BUILD;
+    }
 
-        if (site == null) {
-            log(listener, "Not publishing because no Confluence Site could be found. " +
-                    "Check your Confluence configuration in system settings.");
-            return true;
+    public void save() throws IOException
+    {
+    }
+
+    private List<FilePath> getFileSubtree(File dir)
+    {
+        List<FilePath> artifacts = new ArrayList<FilePath>();
+
+        if (dir == null || dir.listFiles() == null)
+        {
+            return artifacts;
         }
 
-        ConfluenceSession confluence = site.createSession();
-        Result buildResult = build.getResult();
-
-        if (!buildIfUnstable && !Result.SUCCESS.equals(buildResult)) {
-            // Don't process for unsuccessful builds
-            log(listener, "Build status is not SUCCESS (" + build.getResult().toString() + ").");
-            return true;
+        for (File child : dir.listFiles())
+        {
+            if (child.isDirectory())
+            {
+                artifacts.addAll(getFileSubtree(child));
+            }
+            else
+            {
+                artifacts.add(new FilePath(child));
+            }
         }
 
-        EnvVarAction buildResultAction = new EnvVarAction("BUILD_RESULT", String
-                .valueOf(buildResult));
-        build.addAction(buildResultAction);
+        return artifacts;
+    }
 
-        String spaceName = this.spaceName;
-        String pageName = this.pageName;
+    @Override
+    public boolean needsToRun(Result result)
+    {
+        return Result.SUCCESS.equals(result) || publishIfBuildFailed;
+    }
 
-        try {
-            spaceName = build.getEnvironment(listener).expand(spaceName);
-            pageName = build.getEnvironment(listener).expand(pageName);
-        } catch (IOException e) {
-            e.printStackTrace(listener.getLogger());
-        } catch (InterruptedException e) {
-            e.printStackTrace(listener.getLogger());
-        }
+    @Override
+    public boolean perform(AbstractBuild build, Launcher launcher, BuildListener listener) throws RemoteException
+    {
+        try
+        {
+            ConfluenceSite site = descriptor.findSite(siteName);
 
-        RemotePageSummary pageData;
+            build.addAction(new EnvVarAction("BUILD_RESULT", build.getResult().toString()));
 
-        try {
-            pageData = confluence.getPageSummary(spaceName, pageName);
-        } catch (RemoteException e) {
-            // Still shouldn't fail the job, so just dump this to the console and keep going (true).
-            log(listener, "Unable to locate page: " + spaceName + "/" + pageName + ".");
-            log(listener, "Check that the page still exists.  "
-                    + "If the Space and/or Page name contain build-time parameters, "
-                    + "check that the parameter(s) are set to the proper value(s).");
-            return true;
-        }
+            ConfluenceSession session = site.createSession();
 
-        // Perform attachment uploads
-        try {
-            result &= this.performAttachments(build, launcher, listener, confluence, pageData);
-        } catch (IOException e) {
-            e.printStackTrace(listener.getLogger());
-        } catch (InterruptedException e) {
-            e.printStackTrace(listener.getLogger());
-        }
+            String spaceName = expand(build, listener, this.spaceName), pageName = expand(build, listener, this.pageName);
 
-        // Wiki editing is only supported in versions prior to 4.0
-        if (!editors.isEmpty()) {
-            if (!confluence.isVersion4() && pageData instanceof RemotePage) {
-                // Perform wiki replacements
-                try {
-                    result &= this.performWikiReplacements(build, launcher, listener, confluence,
-                            (RemotePage) pageData);
-                } catch (IOException e) {
-                    e.printStackTrace(listener.getLogger());
-                } catch (InterruptedException e) {
-                    e.printStackTrace(listener.getLogger());
+            RemotePageSummary pageSummary = session.getPageSummary(spaceName, pageName);
+
+            attachFiles(build, listener, session, pageSummary);
+
+            if (!editors.isEmpty())
+            {
+                if (!session.isVersion4() && pageSummary instanceof RemotePage)
+                {
+                    performWikiReplacements(build, listener, session, (RemotePage) pageSummary);
                 }
-            } else {
-                log(listener, "EXPERIMENTAL: performing storage format edits on Confluence 4.0");
+                else
+                {
+                    jenkins.plugins.confluence.soap.v2.RemotePage pageDataV2 = session.getPageV2(pageSummary.getId());
 
-                // Must use the v2 API for this.
-                jenkins.plugins.confluence.soap.v2.RemotePage pageDataV2 = confluence
-                        .getPageV2(pageData.getId());
+                    performWikiReplacements(build, listener, session, pageDataV2);
+                }
+            }
 
-                try {
-                    result &= this.performWikiReplacements(build, launcher, listener, confluence,
-                            pageDataV2);
-                } catch (IOException e) {
-                    e.printStackTrace(listener.getLogger());
-                } catch (InterruptedException e) {
+            return true;
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace(listener.getLogger());
+
+            return false;
+        }
+    }
+
+    private void attachFiles(AbstractBuild build, BuildListener listener, ConfluenceSession session, RemotePageSummary pageSummary) throws IOException, InterruptedException
+    {
+        if (build.getWorkspace() != null)
+        {
+            log(listener, "Uploading attachments to: " + pageSummary.getUrl());
+
+            List<FilePath> attachments = new ArrayList<FilePath>();
+
+            if (attachArchivedArtifacts)
+            {
+                attachments.addAll(getFileSubtree(build.getArtifactsDir()));
+            }
+
+            if (!isEmpty(fileSet))
+            {
+                for (FilePath workspaceFile :build.getWorkspace().list(expand(build, listener, fileSet)))
+                {
+                    if (!attachments.contains(workspaceFile))
+                    {
+                        attachments.add(workspaceFile);
+                    }
+                }
+            }
+
+            log(listener, "Uploading " + attachments.size() + " file(s) to Confluence...");
+
+            for (FilePath attachment : attachments)
+            {
+                try
+                {
+                    String contentType = defaultString(guessContentTypeFromName(attachment.getName()), "application/octet-stream");
+
+                    log(listener, "Uploading file: " + attachment.getName() + ", contentType: " + contentType);
+
+                    RemoteAttachment result = session.addAttachment(pageSummary.getId(), attachment, contentType, getAttachComment(build, listener));
+                }
+                catch (Exception e)
+                {
+                    log(listener, "Upload failed: " + attachment.getName());
                     e.printStackTrace(listener.getLogger());
                 }
             }
         }
-
-        // Not returning `result`, because this publisher should not
-        // fail the job
-        return true;
+        else
+        {
+            log(listener, "Workspace is unavailable");
+        }
     }
 
-    private boolean performWikiReplacements(AbstractBuild<?, ?> build, Launcher launcher,
-            BuildListener listener, ConfluenceSession confluence,
-            jenkins.plugins.confluence.soap.v2.RemotePage pageDataV2) throws IOException,
-            InterruptedException {
-
-        final String editComment = build.getEnvironment(listener).expand(
-                "Published from Jenkins build: $BUILD_URL");
-        final jenkins.plugins.confluence.soap.v2.RemotePageUpdateOptions options = new jenkins.plugins.confluence.soap.v2.RemotePageUpdateOptions(
-                false, editComment);
-
-        // Get current content
+    private void performWikiReplacements(AbstractBuild build, BuildListener listener, ConfluenceSession confluence, jenkins.plugins.confluence.soap.v2.RemotePage pageDataV2) throws IOException, InterruptedException
+    {
         String content = performEdits(build, listener, pageDataV2.getContent(), true);
 
-        // Now set the replacement content
         pageDataV2.setContent(content);
-        confluence.updatePageV2(pageDataV2, options);
-        return true;
+
+        confluence.updatePageV2(pageDataV2, new jenkins.plugins.confluence.soap.v2.RemotePageUpdateOptions(false, getEditComment(build, listener)));
     }
 
-    /**
-     * @param build
-     * @param launcher
-     * @param listener
-     * @param confluence
-     * @param pageData
-     * @return
-     * @throws InterruptedException
-     * @throws IOException
-     */
-    protected boolean performWikiReplacements(AbstractBuild<?, ?> build, Launcher launcher,
-            BuildListener listener, ConfluenceSession confluence, RemotePage pageData)
-            throws IOException, InterruptedException {
-
-        final String editComment = build.getEnvironment(listener).expand(
-                "Published from Jenkins build: $BUILD_URL");
-        final RemotePageUpdateOptions options = new RemotePageUpdateOptions(false, editComment);
-
-        // Get current content
+    private void performWikiReplacements(AbstractBuild build, BuildListener listener, ConfluenceSession confluence, RemotePage pageData) throws IOException, InterruptedException
+    {
         String content = performEdits(build, listener, pageData.getContent(), false);
 
-        // Now set the replacement content
         pageData.setContent(content);
-        confluence.updatePage(pageData, options);
-        return true;
+
+        confluence.updatePage(pageData, new RemotePageUpdateOptions(false, getEditComment(build, listener)));
     }
 
-    private String performEdits(final AbstractBuild<?, ?> build, final BuildListener listener,
-            String content, final boolean isNewFormat) {
-        for (MarkupEditor editor : this.editors) {
+    private String performEdits(AbstractBuild build, BuildListener listener, String content, boolean isNewFormat)
+    {
+        for (MarkupEditor editor : editors)
+        {
             log(listener, "Performing wiki edits: " + editor.getDescriptor().getDisplayName());
 
-            try {
+            try
+            {
                 content = editor.performReplacement(build, listener, content, isNewFormat);
-            } catch (TokenNotFoundException e) {
+            }
+            catch (TokenNotFoundException e)
+            {
                 log(listener, "ERROR while performing replacement: " + e.getMessage());
             }
         }
 
         return content;
-    }
-
-    /**
-     * Recursively scan a directory, returning all files encountered
-     *
-     * @param artifactsDir
-     * @return
-     */
-    private List<FilePath> findArtifacts(File artifactsDir) {
-        ArrayList<FilePath> files = new ArrayList<FilePath>();
-
-        if (artifactsDir != null) {
-            for (File f : artifactsDir.listFiles()) {
-                if (f.isDirectory()) {
-                    files.addAll(findArtifacts(f));
-                } else if (f.isFile()) {
-                    files.add(new FilePath(f));
-                }
-            }
-        }
-
-        return files;
-    }
-
-    /**
-     * Log helper
-     *
-     * @param listener
-     * @param message
-     */
-    protected void log(BuildListener listener, String message) {
-        listener.getLogger().println("[confluence] " + message);
-    }
-
-    /**
-     * @return the attachArchivedArtifacts
-     */
-    public boolean shouldAttachArchivedArtifacts() {
-        return attachArchivedArtifacts;
-    }
-
-    /**
-     * @return the buildIfUnstable
-     */
-    public boolean shouldBuildIfUnstable() {
-        return buildIfUnstable;
-    }
-
-    public void save() throws IOException {
-    }
-
-    @Extension
-    public static final class DescriptorImpl extends BuildStepDescriptor<Publisher> {
-        private final List<ConfluenceSite> sites = new ArrayList<ConfluenceSite>();
-
-        public DescriptorImpl() {
-            super(ConfluencePublisher.class);
-            load();
-        }
-
-        public List<Descriptor<MarkupEditor>> getEditors() {
-            final List<Descriptor<MarkupEditor>> editors = new ArrayList<Descriptor<MarkupEditor>>();
-
-            for (Descriptor<MarkupEditor> editor : MarkupEditor.all()) {
-                editors.add(editor);
-            }
-
-            return editors;
-        }
-
-        @Override
-        public boolean configure(StaplerRequest req, JSONObject formData) {
-            this.setSites(req.bindJSONToList(ConfluenceSite.class, formData.get("sites")));
-            save();
-            return true;
-        }
-
-        public FormValidation doPageNameCheck(@QueryParameter String siteName, @QueryParameter String spaceName, @QueryParameter String pageName)
-        {
-            siteName = decode(siteName); spaceName = decode(spaceName); pageName = decode(pageName);
-
-            ConfluenceSite site = this.getSiteByName(siteName);
-
-            if (site == null)
-            {
-                return error("Unknown site: " + siteName);
-            }
-
-            if (isEmpty(spaceName) || isEmpty(pageName))
-            {
-                return ok();
-            }
-
-            try
-            {
-                RemotePageSummary page = site.createSession().getPageSummary(spaceName, pageName);
-
-                return page == null ? error("Page not found") : ok("OK: " + page.getTitle());
-            }
-            catch (RemoteException e)
-            {
-                if (contains(pageName, '$') || contains(spaceName, '$'))
-                {
-                    return warning("Page not found (ignoring build-time parameter)");
-                }
-
-                return error(e, "Page not found");
-            }
-        }
-
-        public FormValidation doSpaceNameCheck(@QueryParameter final String siteName, @QueryParameter final String spaceName) {
-            ConfluenceSite site = this.getSiteByName(siteName);
-
-            if (hudson.Util.fixEmptyAndTrim(spaceName) == null) {
-                return ok();
-            }
-
-            if (site == null) {
-                return error("Unknown site:" + siteName);
-            }
-
-            try {
-                ConfluenceSession confluence = site.createSession();
-                RemoteSpace space = confluence.getSpace(spaceName);
-
-                if (space != null) {
-                    return ok("OK: " + space.getName());
-                }
-
-                return error("Space not found");
-            } catch (RemoteException re) {
-                if (StringUtils.contains(spaceName, '$')) {
-                    return FormValidation
-                            .warning("Space not found (ignoring build-time parameter)");
-                }
-
-                return error(re, "Space not found");
-            }
-        }
-
-        @Override
-        public String getDisplayName() {
-            return "Publish to Confluence";
-        }
-
-        public ConfluenceSite getSiteByName(String siteName) {
-            for (ConfluenceSite site : sites) {
-                if (site.getName().equals(siteName)) {
-                    return site;
-                }
-            }
-            return null;
-        }
-
-        public List<ConfluenceSite> getSites() {
-            return sites;
-        }
-
-        @Override
-        public boolean isApplicable(
-                @SuppressWarnings("rawtypes") Class<? extends AbstractProject> p) {
-            return sites != null && sites.size() > 0;
-        }
-
-        @Override
-        public Publisher newInstance(StaplerRequest req, JSONObject formData)
-                throws hudson.model.Descriptor.FormException {
-            return req.bindJSON(ConfluencePublisher.class, formData);
-        }
-
-        public void setSites(List<ConfluenceSite> sites) {
-            this.sites.clear();
-            this.sites.addAll(sites);
-        }
-    }
-
-    /**
-     * Build action that is capable of inserting arbitrary KVPs into the EnvVars.
-     *
-     * @author jhansche
-     */
-    public static class EnvVarAction implements EnvironmentContributingAction {
-        private final String name;
-        private final String value;
-
-        public EnvVarAction(final String name, final String value) {
-            this.name = name;
-            this.value = value;
-        }
-
-        public String getIconFileName() {
-            return null;
-        }
-
-        public String getDisplayName() {
-            return null;
-        }
-
-        public String getUrlName() {
-            return null;
-        }
-
-        public void buildEnvVars(AbstractBuild<?, ?> build, EnvVars env) {
-            env.put(name, value);
-        }
     }
 }

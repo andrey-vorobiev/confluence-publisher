@@ -38,25 +38,19 @@ public class BeforeTokenEditor extends MarkupEditor
     }
 
     @Override
-    public String performEdits(BuildListener listener, String content, String generated, boolean isNewFormat) throws TokenNotFoundException
+    public String performEdits(String content, String generated, boolean useNewFormat) throws TokenNotFoundException
     {
-        final StringBuffer sb = new StringBuffer(content);
+        StringBuilder sb = new StringBuilder(content);
 
-        final int start = content.indexOf(markerToken);
+        int insertIndex = content.indexOf(markerToken);
 
-        if (start < 0) {
-            throw new TokenNotFoundException(
-                    "Marker token could not be located in the page content: " + markerToken);
+        if (insertIndex < 0)
+        {
+            throw new TokenNotFoundException("Marker token could not be located in the page content: " + markerToken);
         }
 
-        // Insert the newline at {start} first, and then {generated}
-        // (the newline will appear after {generated})
+        sb.insert(insertIndex, getSeparator(useNewFormat) + generated);
 
-        if (isNewFormat) {
-            sb.insert(start, generated);
-        } else {
-            sb.insert(start, '\n').insert(start, generated);
-        }
         return sb.toString();
     }
 }

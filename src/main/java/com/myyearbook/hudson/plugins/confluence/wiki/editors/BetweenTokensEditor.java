@@ -35,6 +35,7 @@ public class BetweenTokensEditor extends MarkupEditor
     public BetweenTokensEditor(MarkupGenerator generator, String startMarkerToken, String endMarkerToken)
     {
         super(generator);
+
         this.startMarkerToken = unquoteToken(Util.fixEmptyAndTrim(startMarkerToken));
         this.endMarkerToken = unquoteToken(Util.fixEmptyAndTrim(endMarkerToken));
     }
@@ -43,38 +44,26 @@ public class BetweenTokensEditor extends MarkupEditor
      * Inserts the generated content in the section between the
      * {@link #startMarkerToken} and {@link #endMarkerToken}.
      *
-     * @param listener
-     * @param content
-     * @param generated
-     * @throws TokenNotFoundException
      */
     @Override
-    public String performEdits(BuildListener listener, final String content, String generated, boolean isNewFormat) throws TokenNotFoundException
+    public String performEdits(String content, String generated, boolean useNewFormat) throws TokenNotFoundException
     {
-        final StringBuffer sb = new StringBuffer(content);
+        StringBuilder sb = new StringBuilder(content);
 
-        final int start = content.indexOf(startMarkerToken) + startMarkerToken.length();
-        final int end = content.indexOf(endMarkerToken);
+        int start = content.indexOf(startMarkerToken) + startMarkerToken.length(), end = content.indexOf(endMarkerToken);
 
-        if (start < 0) {
-            throw new TokenNotFoundException(
-                    "Start-marker token could not be found in the page content: "
-                            + startMarkerToken);
-        } else if (end < 0) {
-            throw new TokenNotFoundException(
-                    "End-marker token could not be found in the page content: " + endMarkerToken);
+        if (start < 0)
+        {
+            throw new TokenNotFoundException("Start-marker token could not be found in the page content: "+ startMarkerToken);
         }
 
-        // Remove the entire marked section (exclusive)
-        sb.delete(start, end);
-
-        // Then insert the new content:
-        if (isNewFormat) {
-            sb.insert(start, generated);
-        } else {
-            // Surround in newlines
-            sb.insert(start, '\n').insert(start, generated).insert(start, '\n');
+        if (end < 0)
+        {
+            throw new TokenNotFoundException("End-marker token could not be found in the page content: " + endMarkerToken);
         }
+
+        sb.replace(start, end, getSeparator(useNewFormat) + generated + getSeparator(useNewFormat));
+
         return sb.toString();
     }
 }

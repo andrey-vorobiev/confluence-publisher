@@ -38,27 +38,19 @@ public class AfterTokenEditor extends MarkupEditor
     }
 
     @Override
-    public String performEdits(BuildListener listener, String content, String generated, boolean isNewFormat) throws TokenNotFoundException
+    public String performEdits(String content, String generated, boolean useNewFormat) throws TokenNotFoundException
     {
-        final StringBuffer sb = new StringBuffer(content);
+        StringBuilder sb = new StringBuilder(content);
 
-        final int start = content.indexOf(markerToken);
+        int markerIndex = content.indexOf(markerToken);
 
-        if (start < 0) {
-            throw new TokenNotFoundException(
-                    "Marker token could not be located in the page content: " + markerToken);
+        if (markerIndex < 0)
+        {
+            throw new TokenNotFoundException("Marker token could not be located in the page content: " + markerToken);
         }
 
-        final int end = start + markerToken.length();
+        sb.insert(markerIndex + markerToken.length(), getSeparator(useNewFormat) + generated);
 
-        // Insert the newline at the end of the token, then {generated}
-        // immediately after that
-
-        if (isNewFormat) {
-            sb.insert(end, generated);
-        } else {
-            sb.insert(end, '\n').insert(end + 1, generated);
-        }
         return sb.toString();
     }
 }

@@ -1,9 +1,9 @@
 
 package com.myyearbook.hudson.plugins.confluence.wiki.generators;
 
+import hudson.EnvVars;
 import hudson.Extension;
-import hudson.model.BuildListener;
-import hudson.model.AbstractBuild;
+import hudson.FilePath;
 import hudson.model.Descriptor;
 
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -29,20 +29,14 @@ public class PlainTextGenerator extends MarkupGenerator
     public final String text;
 
     @DataBoundConstructor
-    public PlainTextGenerator(final String text)
+    public PlainTextGenerator(String text)
     {
         this.text = text;
     }
 
     @Override
-    public Descriptor<MarkupGenerator> getDescriptor()
+    public String generateMarkup(FilePath workspace, EnvVars vars)
     {
-        return super.getDescriptor();
-    }
-
-    @Override
-    public String generateMarkup(AbstractBuild build, BuildListener listener)
-    {
-        return expand(build, listener, this.text);
+        return vars.expand(text);
     }
 }

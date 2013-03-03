@@ -8,7 +8,8 @@ import java.net.URI;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public class Util {
+public class Util
+{
     /** Relative path to resolve the XmlRpc endpoint URL */
     private static final String XML_RPC_URL_PATH = "rpc/xmlrpc";
 
@@ -25,9 +26,9 @@ public class Util {
      * @return
      * @see #XML_RPC_URL_PATH
      */
-    public static String confluenceUrlToXmlRpcUrl(String url) {
-        URI uri = URI.create(url);
-        return uri.resolve(XML_RPC_URL_PATH).normalize().toString();
+    public static String confluenceUrlToXmlRpcUrl(String url)
+    {
+        return URI.create(url).resolve(XML_RPC_URL_PATH).normalize().toString();
     }
 
     /**
@@ -37,13 +38,13 @@ public class Util {
      * @return
      * @see #SOAP_URL_PATH
      */
-    public static String confluenceUrlToSoapUrl(String url) {
-        URI uri = URI.create(url);
-        return uri.resolve(SOAP_URL_PATH).normalize().toString();
+    public static String confluenceUrlToSoapUrl(String url)
+    {
+        return URI.create(url).resolve(SOAP_URL_PATH).normalize().toString();
     }
 
-    public static String confluenceUrlToSoapV2Url(String url) {
-        URI uri = URI.create(url);
-        return uri.resolve(SOAP_V2_URL_PATH).normalize().toString();
+    public static String confluenceUrlToSoapV2Url(String url)
+    {
+        return URI.create(url).resolve(SOAP_V2_URL_PATH).normalize().toString();
     }
 }

@@ -33,18 +33,12 @@ public class PrependEditor extends MarkupEditor
     }
 
     @Override
-    public String performEdits(BuildListener listener,String content, String generated, boolean isNewFormat)
+    public String performEdits(String content, String generated, boolean useNewFormat)
     {
-        final StringBuilder sb = new StringBuilder(content);
+        StringBuilder sb = new StringBuilder(content);
 
-        // Prepend the generated content to the beginning of the page
-        if (isNewFormat) {
-            // New format: wrap the new content with <p />
-            sb.insert(0, generated);
-        } else {
-            // Insert newline at the beginning, generated content before that
-            sb.insert(0, '\n').insert(0, generated);
-        }
+        sb.insert(0, getSeparator(useNewFormat) + generated);
+
         return sb.toString();
     }
 }

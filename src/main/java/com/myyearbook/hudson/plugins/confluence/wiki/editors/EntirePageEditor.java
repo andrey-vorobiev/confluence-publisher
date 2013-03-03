@@ -27,13 +27,13 @@ public class EntirePageEditor extends MarkupEditor
     }
 
     @DataBoundConstructor
-    public EntirePageEditor(final MarkupGenerator generator)
+    public EntirePageEditor(MarkupGenerator generator)
     {
         super(generator);
     }
 
     @Override
-    public String performEdits(BuildListener listener, String content, String generated, boolean isNewFormat)
+    public String performEdits(String content, String generated, boolean useNewFormat)
     {
         return generated;
     }

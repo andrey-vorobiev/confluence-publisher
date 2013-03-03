@@ -3,6 +3,7 @@ package com.myyearbook.hudson.plugins.confluence;
 import com.myyearbook.hudson.plugins.confluence.wiki.editors.MarkupEditor;
 import com.myyearbook.hudson.plugins.confluence.wiki.editors.MarkupEditor.TokenNotFoundException;
 
+import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
@@ -24,11 +25,10 @@ import java.io.IOException;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import jenkins.plugins.confluence.soap.v1.*;
 
+import static com.myyearbook.hudson.plugins.confluence.CommonHelper.*;
 import static java.net.URLConnection.guessContentTypeFromName;
 import static org.apache.commons.lang.StringUtils.*;
 
@@ -37,8 +37,6 @@ public class ConfluencePublisher extends Notifier implements Saveable
 {
     @Extension
     public static final ConfluenceBuildStepDescriptor descriptor = new ConfluenceBuildStepDescriptor();
-
-    private static final Logger log = Logger.getLogger(ConfluencePublisher.class.getName());
 
     private String siteName;
 
@@ -64,11 +62,6 @@ public class ConfluencePublisher extends Notifier implements Saveable
         this.attachArchivedArtifacts = attachArchivedArtifacts;
         this.fileSet = fileSet;
         this.editors.addAll(editorList);
-    }
-
-    private static void log(BuildListener listener, String message)
-    {
-        listener.getLogger().println("[confluence] " + message);
     }
 
     public String getSiteName()
@@ -101,27 +94,14 @@ public class ConfluencePublisher extends Notifier implements Saveable
         return publishIfBuildFailed;
     }
 
-    private String expand(AbstractBuild build, BuildListener listener, String source)
+    private String getEditComment(EnvVars vars)
     {
-        try
-        {
-            return build.getEnvironment(listener).expand(source);
-        }
-        catch (Exception e)
-        {
-            log.log(Level.WARNING, "Unable to expand source: " + source, e);
-            return source;
-        }
+        return vars.expand("Published from Hudson/Jenkins build: $BUILD_URL");
     }
 
-    private String getEditComment(AbstractBuild build, BuildListener listener)
+    private String getAttachComment(EnvVars vars)
     {
-        return expand(build, listener, "Published from Hudson/Jenkins build: $BUILD_URL");
-    }
-
-    private String getAttachComment(AbstractBuild build, BuildListener listener)
-    {
-        return expand(build, listener, "Published from Hudson/Jenkins build: $BUILD_URL");
+        return vars.expand("Published from Hudson/Jenkins build: $BUILD_URL");
     }
 
     @Exported
@@ -175,6 +155,16 @@ public class ConfluencePublisher extends Notifier implements Saveable
         return Result.SUCCESS.equals(result) || publishIfBuildFailed;
     }
 
+    protected EnvVars getEnvVars(AbstractBuild build, BuildListener listener) throws IOException, InterruptedException
+    {
+        EnvVars vars = build.getEnvironment(listener);
+
+        vars.put("BUILD_URL", build.getUrl());
+        vars.put("BUILD_RESULT", build.getResult().toString());
+
+        return vars;
+    }
+
     @Override
     public boolean perform(AbstractBuild build, Launcher launcher, BuildListener listener) throws RemoteException
     {
@@ -182,27 +172,25 @@ public class ConfluencePublisher extends Notifier implements Saveable
         {
             ConfluenceSite site = descriptor.findSite(siteName);
 
-            build.addAction(new EnvVarAction("BUILD_RESULT", build.getResult().toString()));
+            EnvVars envVars = getEnvVars(build, listener);
 
             ConfluenceSession session = site.createSession();
 
-            String spaceName = expand(build, listener, this.spaceName), pageName = expand(build, listener, this.pageName);
+            RemotePageSummary pageSummary = session.getPageSummary(expand(build, listener, spaceName), expand(build, listener, pageName));
 
-            RemotePageSummary pageSummary = session.getPageSummary(spaceName, pageName);
-
-            attachFiles(build, listener, session, pageSummary);
+            attachFiles(build, envVars, session, pageSummary);
 
             if (!editors.isEmpty())
             {
                 if (!session.isVersion4() && pageSummary instanceof RemotePage)
                 {
-                    performWikiReplacements(build, listener, session, (RemotePage) pageSummary);
+                    performWikiReplacements(build.getWorkspace(), envVars, session, (RemotePage) pageSummary);
                 }
                 else
                 {
                     jenkins.plugins.confluence.soap.v2.RemotePage pageDataV2 = session.getPageV2(pageSummary.getId());
 
-                    performWikiReplacements(build, listener, session, pageDataV2);
+                    performWikiReplacements(build.getWorkspace(), envVars, session, pageDataV2);
                 }
             }
 
@@ -216,12 +204,10 @@ public class ConfluencePublisher extends Notifier implements Saveable
         }
     }
 
-    private void attachFiles(AbstractBuild build, BuildListener listener, ConfluenceSession session, RemotePageSummary pageSummary) throws IOException, InterruptedException
+    private void attachFiles(AbstractBuild build, EnvVars vars, ConfluenceSession session, RemotePageSummary pageSummary) throws IOException, InterruptedException
     {
         if (build.getWorkspace() != null)
         {
-            log(listener, "Uploading attachments to: " + pageSummary.getUrl());
-
             List<FilePath> attachments = new ArrayList<FilePath>();
 
             if (attachArchivedArtifacts)
@@ -231,7 +217,7 @@ public class ConfluencePublisher extends Notifier implements Saveable
 
             if (!isEmpty(fileSet))
             {
-                for (FilePath workspaceFile :build.getWorkspace().list(expand(build, listener, fileSet)))
+                for (FilePath workspaceFile : build.getWorkspace().list(vars.expand(fileSet)))
                 {
                     if (!attachments.contains(workspaceFile))
                     {
@@ -240,65 +226,50 @@ public class ConfluencePublisher extends Notifier implements Saveable
                 }
             }
 
-            log(listener, "Uploading " + attachments.size() + " file(s) to Confluence...");
-
             for (FilePath attachment : attachments)
             {
                 try
                 {
                     String contentType = defaultString(guessContentTypeFromName(attachment.getName()), "application/octet-stream");
 
-                    log(listener, "Uploading file: " + attachment.getName() + ", contentType: " + contentType);
-
-                    RemoteAttachment result = session.addAttachment(pageSummary.getId(), attachment, contentType, getAttachComment(build, listener));
+                    RemoteAttachment result = session.addAttachment(pageSummary.getId(), attachment, contentType, getAttachComment(vars));
                 }
                 catch (Exception e)
                 {
-                    log(listener, "Upload failed: " + attachment.getName());
-                    e.printStackTrace(listener.getLogger());
+                    throw new RuntimeException(e);
                 }
             }
         }
-        else
-        {
-            log(listener, "Workspace is unavailable");
-        }
     }
 
-    private void performWikiReplacements(AbstractBuild build, BuildListener listener, ConfluenceSession confluence, jenkins.plugins.confluence.soap.v2.RemotePage pageDataV2) throws IOException, InterruptedException
+    private void performWikiReplacements(FilePath workspace, EnvVars vars, ConfluenceSession session, jenkins.plugins.confluence.soap.v2.RemotePage page) throws IOException, InterruptedException
     {
-        String content = performEdits(build, listener, pageDataV2.getContent(), true);
+        page.setContent(performEdits(workspace, vars, page.getContent(), true));
 
-        pageDataV2.setContent(content);
-
-        confluence.updatePageV2(pageDataV2, new jenkins.plugins.confluence.soap.v2.RemotePageUpdateOptions(false, getEditComment(build, listener)));
+        session.updatePageV2(page, new jenkins.plugins.confluence.soap.v2.RemotePageUpdateOptions(false, getEditComment(vars)));
     }
 
-    private void performWikiReplacements(AbstractBuild build, BuildListener listener, ConfluenceSession confluence, RemotePage pageData) throws IOException, InterruptedException
+    private void performWikiReplacements(FilePath workspace, EnvVars vars, ConfluenceSession session, RemotePage page) throws IOException, InterruptedException
     {
-        String content = performEdits(build, listener, pageData.getContent(), false);
+        page.setContent(performEdits(workspace, vars, page.getContent(), false));
 
-        pageData.setContent(content);
-
-        confluence.updatePage(pageData, new RemotePageUpdateOptions(false, getEditComment(build, listener)));
+        session.updatePage(page, new RemotePageUpdateOptions(false, getEditComment(vars)));
     }
 
-    private String performEdits(AbstractBuild build, BuildListener listener, String content, boolean isNewFormat)
+    private String performEdits(FilePath workspace, EnvVars vars, String pageSource, boolean isNewFormat)
     {
         for (MarkupEditor editor : editors)
         {
-            log(listener, "Performing wiki edits: " + editor.getDescriptor().getDisplayName());
-
             try
             {
-                content = editor.performReplacement(build, listener, content, isNewFormat);
+                pageSource = editor.performReplacement(workspace, vars, pageSource, isNewFormat);
             }
             catch (TokenNotFoundException e)
             {
-                log(listener, "ERROR while performing replacement: " + e.getMessage());
+                throw new RuntimeException(e);
             }
         }
 
-        return content;
+        return pageSource;
     }
 }

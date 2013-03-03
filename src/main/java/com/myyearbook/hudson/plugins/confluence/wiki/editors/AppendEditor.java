@@ -33,16 +33,12 @@ public class AppendEditor extends MarkupEditor
     }
 
     @Override
-    public String performEdits(BuildListener listener, String content, String generated, boolean isNewFormat)
+    public String performEdits(String content, String generated, boolean useNewFormat)
     {
-        final StringBuilder sb = new StringBuilder(content);
-        // Append the generated content to the end of the page
+        StringBuilder sb = new StringBuilder(content);
 
-        if (isNewFormat) {
-            sb.append(generated);
-        } else {
-            sb.append('\n').append(generated);
-        }
+        sb.append(getSeparator(useNewFormat)).append(generated);
+
         return sb.toString();
     }
 }

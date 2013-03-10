@@ -1,5 +1,6 @@
 package com.myyearbook.hudson.plugins.confluence;
 
+import com.myyearbook.hudson.plugins.confluence.variable.EnvironmentVariablesHolder;
 import com.myyearbook.hudson.plugins.confluence.wiki.editors.MarkupEditor;
 
 import hudson.EnvVars;
@@ -50,6 +51,8 @@ public class ConfluencePublisher extends Notifier implements Saveable
 
     private DescribableList<MarkupEditor, Descriptor<MarkupEditor>> editors = new DescribableList<MarkupEditor, Descriptor<MarkupEditor>>(this);
 
+    private transient EnvironmentVariablesHolder variablesHolder = new EnvironmentVariablesHolder();
+
     @DataBoundConstructor
     public ConfluencePublisher(String confluenceSiteName, boolean buildIfUnstable, String confluenceSpaceName, final String confluencePageName, boolean attachArchivedArtifacts, String fileSet, List<MarkupEditor> editorList) throws IOException
     {
@@ -60,6 +63,13 @@ public class ConfluencePublisher extends Notifier implements Saveable
         this.attachArchivedArtifacts = attachArchivedArtifacts;
         this.fileSet = fileSet;
         this.editors.addAll(editorList);
+    }
+
+    private Object readResolve()
+    {
+        variablesHolder = new EnvironmentVariablesHolder();
+
+        return this;
     }
 
     public String getSiteName()
@@ -154,16 +164,19 @@ public class ConfluencePublisher extends Notifier implements Saveable
             }
 
             @Override
+            public AbstractBuild getBuild()
+            {
+                return build;
+            }
+
+            @Override
             public EnvVars getEnvVars()
             {
                 try
                 {
-                    EnvVars vars = build.getEnvironment(listener);
+                    EnvVars envVars = build.getEnvironment(listener);
 
-                    vars.put("BUILD_URL", build.getUrl());
-                    vars.put("BUILD_RESULT", build.getResult().toString());
-
-                    return vars;
+                    return variablesHolder.update(envVars, this);
                 }
                 catch (Exception e)
                 {

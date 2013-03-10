@@ -32,7 +32,9 @@ import jenkins.plugins.confluence.soap.v1.RemoteServerInfo;
  *
  * @author Joe Hansche <jhansche@myyearbook.com>
  */
-public class ConfluenceSite implements Describable<ConfluenceSite> {
+public class ConfluenceSite implements Describable<ConfluenceSite>
+{
+    private static final Logger log = Logger.getLogger(ConfluenceSite.class.getName());
     /**
      * The base URL of the Confluence site
      */
@@ -57,7 +59,7 @@ public class ConfluenceSite implements Describable<ConfluenceSite> {
      */
     @DataBoundConstructor
     public ConfluenceSite(URL url, final String username, final String password) {
-        LOGGER.log(Level.FINER, "ctor args: " + url + ", " + username + ", " + password);
+        log.log(Level.FINER, "ctor args: " + url + ", " + username + ", " + password);
 
         if (!url.toExternalForm().endsWith("/")) {
             try {
@@ -80,7 +82,7 @@ public class ConfluenceSite implements Describable<ConfluenceSite> {
      */
     public ConfluenceSession createSession() throws RemoteException {
         final String rpcUrl = Util.confluenceUrlToSoapUrl(url.toExternalForm());
-        LOGGER.log(Level.FINEST, "[confluence] Using RPC url: " + rpcUrl);
+        log.log(Level.FINEST, "[confluence] Using RPC url: " + rpcUrl);
 
         final ConfluenceSoapService service = XmlRpcClient.getInstance(rpcUrl);
         final String token;
@@ -149,10 +151,10 @@ public class ConfluenceSite implements Describable<ConfluenceSite> {
                 site.createSession();
                 return FormValidation.ok("SUCCESS");
             } catch (AxisFault e) {
-                LOGGER.log(Level.WARNING, "Failed to login to Confluence at " + url, e);
+                log.log(Level.WARNING, "Failed to login to Confluence at " + url, e);
                 return FormValidation.error(e, "Failed to login");
             } catch (RemoteException e) {
-                LOGGER.log(Level.WARNING, "Failed to login to Confluence at " + url, e);
+                log.log(Level.WARNING, "Failed to login to Confluence at " + url, e);
                 return FormValidation.error(e, "Failed to login");
             }
         }
@@ -184,7 +186,7 @@ public class ConfluenceSite implements Describable<ConfluenceSite> {
 
                         return FormValidation.error("Not a Confluence URL");
                     } catch (IOException e) {
-                        LOGGER.log(Level.WARNING, "Unable to connect to " + url, e);
+                        log.log(Level.WARNING, "Unable to connect to " + url, e);
                         return handleIOException(url, e);
                     }
                 }
@@ -196,6 +198,4 @@ public class ConfluenceSite implements Describable<ConfluenceSite> {
             return "Confluence Site";
         }
     }
-
-    private static final Logger LOGGER = Logger.getLogger(ConfluenceSite.class.getName());
 }
